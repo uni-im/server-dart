@@ -4,11 +4,11 @@ List<WebSocket> clients = new List();
 List<String> messages = new List();
 
 main(List<String> args) async {
-  HttpServer.bind('0.0.0.0', 8081).then((server) {
+  HttpServer.bind('0.0.0.0', 8080).then((server) {
     server
         .asyncMap(WebSocketTransformer.upgrade)
-        .forEach(_register)
-        .catchError((e) => print("Error: $e"));
+        .handleError((e) => print("Error: $e"))
+        .forEach(_register);
   });
 }
 
