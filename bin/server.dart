@@ -1,14 +1,14 @@
 import 'dart:io';
+import 'dart:convert';
+
+import "./endpoints_v1.dart";
 
 List<WebSocket> clients = new List();
 List<String> messages = new List();
 
 main(List<String> args) async {
-  HttpServer.bind('0.0.0.0', 8080).then((server) {
-    server
-        .asyncMap(WebSocketTransformer.upgrade)
-        .handleError((e) => print("Error: $e"))
-        .forEach(_register);
+  HttpServer.bind('0.0.0.0', 8081).then((server) {
+    var v1Endpoints = new V1Endpoints(server);
   });
 }
 
@@ -21,8 +21,12 @@ void _register(WebSocket ws) {
 
   // Setup listener
   ws.listen((d) {
-    // Queue messages
-    messages.add(d);
+    var blob = JSON.decode(d);
+
+    if (blob['type'] != 'AtomType.control') {
+      // Queue noncontrol messages
+      messages.add(d);
+    }
 
     // Broadcast message
     clients.forEach((client) => client.add(d));
