@@ -1,3 +1,7 @@
 name: server
 version: 0.0.2-alpha
 description: A simple websocket multiplexer for chat messages
+
+dependencies:
+  client:
+    path: /home/benjica/Source/uni-im/client
