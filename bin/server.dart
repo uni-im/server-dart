@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import "./endpoints_v1.dart";
+import "package:server/server.dart";
 
 List<WebSocket> clients = new List();
 List<String> messages = new List();

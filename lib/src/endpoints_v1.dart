@@ -5,75 +5,49 @@ import 'dart:io';
 
 import 'package:client/client.dart';
 
-class NoOpPresenter extends Presenter {
-  @override
-  present() {}
-}
-
-class NoOpPresenterFactory extends PresenterFactory {
-  @override
-  Presenter getPresenter(Message) {
-    return new NoOpPresenter();
-  }
-}
-
-class Client {
-  final bool isLegacy;
-  final WebSocket webSocket;
-
-  Client(this.webSocket, {this.isLegacy: false});
-}
+part 'presenters.dart';
 
 class V1Endpoints {
   static const version = 'v1';
 
+  TransportAtomFactory _transportFactory;
+  MessageFactory _messageFactory;
+  List<Channel> _channels = [];
   List<WebSocket> clients = [];
-  List<String> messages = [];
+  List<MessageAtom> messages = [];
   final HttpServer server;
-  TransportAtomFactory atomFactory;
-  List<Channel> channels =
-      ['foo', 'bar', 'baz'].map((t) => new GroupChannel(t));
   Map<String, Function> _handlers = {};
 
   V1Endpoints(this.server) {
-    atomFactory = new TransportAtomFactory(
-        new MessageFactory(new NoOpPresenterFactory()), channels);
-    _handlers['/'] = _handleLegacyWebSocket;
-    _handlers['/$version/ws'] = _handleWebSocket;
-    _handlers['/$version/files'] = _handleFile;
-
+    _handlers['/$version/ws'] = _handleWs;
+    _handlers['/$version/upload'] = _handleUpload;
+    _messageFactory = new MessageFactory(new ServerPresenterFactory());
+    _transportFactory = new TransportAtomFactory(_messageFactory, _channels);
     server.listen(_handle);
   }
 
-  Future _handleLegacyWebSocket(HttpRequest req) {
-    return _handleWebSocket(req, legacy: true);
-  }
-
-  Future _handleWebSocket(HttpRequest req, {legacy: false}) async {
-    _log(req);
-    WebSocket ws = await WebSocketTransformer.upgrade(req);
+  Future _handleWs(HttpRequest req) async {
+    var ws = await WebSocketTransformer.upgrade(req);
     clients.add(ws);
-    messages.forEach((m) => ws.add(m));
 
-    ws.listen((d) {
-      var atom = atomFactory.fromJson(d);
+    messages.forEach((m) {
+      ws.add(m.marshal());
+    });
 
-      switch (atom.type) {
-        case AtomType.message:
-          break;
-        case AtomType.control:
-          break;
+    ws.listen((data) {
+      var atom = _transportFactory.fromJson(data);
+
+      if (atom is MessageAtom) {
+        messages.add(atom);
       }
 
-      clients.forEach((client) => client.add(d));
-    })
-      ..onDone(() => clients.remove(ws))
-      ..onError((error) => print('ERROR: $error'));
+      print("${new DateTime.now()}: $atom");
+      clients.forEach((client) => client.add(data));
+    });
   }
 
-  void _handleFile(HttpRequest req) {
+  void _handleUpload(HttpRequest req) {
     req.response.statusCode = HttpStatus.NOT_IMPLEMENTED;
-    req.response.close();
   }
 
   void _defaultHandler(HttpRequest req) {
@@ -82,14 +56,6 @@ class V1Endpoints {
   }
 
   void _handle(HttpRequest req) {
-    var handler = _handlers[req.uri.path] ?? _defaultHandler;
-    handler(req);
-    _log(req);
-  }
-
-  void _log(HttpRequest req) {
-    var timestamp = new DateTime.now();
-    print(
-        "${timestamp.toIso8601String()} ${req.method}\t${req.uri.path}\t${req.response.statusCode}");
+    (_handlers[req.uri.path] ?? _defaultHandler)(req);
   }
 }
