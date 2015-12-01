@@ -5,6 +5,9 @@ build/
 packages
 .packages
 
+# Don't track credentials
+service.json
+
 # Or the files created by dart2js.
 *.dart.js
 *.js_
