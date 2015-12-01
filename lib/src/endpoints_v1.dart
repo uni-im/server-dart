@@ -1,11 +1,17 @@
 library server.src.endpoints_v1;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:client/client.dart';
+import 'package:http_server/http_server.dart';
+import 'package:googleapis/storage/v1.dart' as google;
+import 'package:googleapis_auth/auth_io.dart';
 
 part 'presenters.dart';
+
+const _scopes = const [google.StorageApi.DevstorageReadWriteScope];
 
 class V1Endpoints {
   static const version = 'v1';
@@ -18,12 +24,24 @@ class V1Endpoints {
   final HttpServer server;
   Map<String, Function> _handlers = {};
 
+  google.StorageApi _storageClient;
+
   V1Endpoints(this.server) {
     _handlers['/$version/ws'] = _handleWs;
     _handlers['/$version/upload'] = _handleUpload;
     _messageFactory = new MessageFactory(new ServerPresenterFactory());
     _transportFactory = new TransportAtomFactory(_messageFactory, _channels);
     server.listen(_handle);
+
+    // Setup google webstorage
+    new File("/tmp/service.json").readAsString()
+      ..then((String json) {
+        var credentials = new ServiceAccountCredentials.fromJson(json);
+        clientViaServiceAccount(credentials, _scopes)
+          ..then((client) => _storageClient = new google.StorageApi(client))
+          ..catchError((e) => print('Unable to create storage client: $e'));
+      })
+      ..catchError((e) => print('Unable to load service credential file: $e'));
   }
 
   Future _handleWs(HttpRequest req) async {
@@ -46,12 +64,50 @@ class V1Endpoints {
     });
   }
 
-  void _handleUpload(HttpRequest req) {
-    req.response.statusCode = HttpStatus.NOT_IMPLEMENTED;
+  Future _handleUpload(HttpRequest req) async {
+    if (_storageClient == null) {
+      return _closeConnection(HttpStatus.SERVICE_UNAVAILABLE, req);
+    }
+
+    var bodyStream;
+    var request = await HttpBodyHandler.processRequest(req);
+    HttpBodyFileUpload upload = request.body['file'];
+
+    if (upload == null) {
+      return _closeConnection(HttpStatus.BAD_REQUEST, req);
+    }
+
+    if (upload.content is String) {
+      bodyStream = new Stream.fromIterable([UTF8.encode(upload.content)]);
+    } else {
+      bodyStream = new Stream.fromIterable([upload.content]);
+    }
+
+    _storageClient.buckets.get('uni-im-files')
+      ..then((bucket) {
+        google.Media media = new google.Media(bodyStream, upload.content.length,
+            contentType: upload.contentType.toString());
+
+        _storageClient.objects.insert(null, bucket.name,
+            uploadMedia: media,
+            name: upload.filename,
+            predefinedAcl: 'publicRead')
+          ..then((o) {
+            var response = {'link': o.mediaLink};
+            req.response.write(JSON.encode(response));
+            req.response.close();
+          })
+          ..catchError(print);
+      })
+      ..catchError(print);
   }
 
   void _defaultHandler(HttpRequest req) {
-    req.response.statusCode = HttpStatus.NOT_FOUND;
+    _closeConnection(HttpStatus.NOT_FOUND, req);
+  }
+
+  void _closeConnection(int status, HttpRequest req) {
+    req.response.statusCode = status;
     req.response.close();
   }
 
