@@ -1,3 +1,9 @@
 name: server
 version: 0.0.2-alpha
 description: A simple websocket multiplexer for chat messages
+
+dependencies:
+  client:
+   git:
+       url: https://github.com/uni-im/client.git
+       ref: f0b203e3d1224b665292943c1d8eff16fc038fdc 
