@@ -9,4 +9,4 @@ dependencies:
   client:
    git:
        url: https://github.com/uni-im/client.git
-       ref: 0.2.0
+       ref: "v0.2.0"
