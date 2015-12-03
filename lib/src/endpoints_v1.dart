@@ -97,7 +97,10 @@ class V1Endpoints {
             name: upload.filename,
             predefinedAcl: 'publicRead')
           ..then((o) {
-            var response = {'link': o.mediaLink};
+            var response = {
+              'link': o.mediaLink,
+              'content-type': upload.contentType
+            };
             req.response.write(JSON.encode(response));
             req.response.close();
           })
