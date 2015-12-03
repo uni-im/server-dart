@@ -43,9 +43,9 @@ class V1Endpoints {
         var credentials = new ServiceAccountCredentials.fromJson(json);
         clientViaServiceAccount(credentials, _scopes)
           ..then((client) => _storageClient = new google.StorageApi(client))
-          ..catchError((e) => print('Unable to create storage client: $e'));
+          ..catchError((e) => _log('Unable to create storage client: $e'));
       })
-      ..catchError((e) => print('Unable to load service credential file: $e'));
+      ..catchError((e) => _log('Unable to load service credential file: $e'));
   }
 
   Future _handleWs(HttpRequest req) async {
@@ -63,7 +63,7 @@ class V1Endpoints {
         messages.add(atom);
       }
 
-      print("${new DateTime.now()}: $atom");
+      _log(atom);
       clients.forEach((client) => client.add(data));
     });
   }
@@ -97,13 +97,17 @@ class V1Endpoints {
             name: upload.filename,
             predefinedAcl: 'publicRead')
           ..then((o) {
-            var response = {'link': o.mediaLink};
+            var response = {
+              'link': o.mediaLink,
+              'content-type': upload.contentType.toString()
+            };
+            _log("Successfully uploaded file: ${upload.filename}");
             req.response.write(JSON.encode(response));
             req.response.close();
           })
-          ..catchError(print);
+          ..catchError(_log);
       })
-      ..catchError(print);
+      ..catchError(_log);
   }
 
   void _defaultHandler(HttpRequest req) {
@@ -131,6 +135,10 @@ class V1Endpoints {
         .add("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
     req.response.headers.add("Access-Control-Allow-Headers",
         "Origin, X-Requested-With, Content-Type, Accept");
+  }
+
+  void _log(dynamic message) {
+    print("${new DateTime.now()} $message");
   }
 
   void _handle(HttpRequest req) {
