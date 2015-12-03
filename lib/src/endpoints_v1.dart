@@ -9,12 +9,14 @@ import 'package:http_server/http_server.dart';
 import 'package:googleapis/storage/v1.dart' as google;
 import 'package:googleapis_auth/auth_io.dart';
 
+part 'configuration.dart';
 part 'presenters.dart';
 
 const _scopes = const [google.StorageApi.DevstorageReadWriteScope];
 
 class V1Endpoints {
   static const version = 'v1';
+  Configuration configuration;
 
   TransportAtomFactory _transportFactory;
   MessageFactory _messageFactory;
@@ -32,6 +34,8 @@ class V1Endpoints {
     _messageFactory = new MessageFactory(new ServerPresenterFactory());
     _transportFactory = new TransportAtomFactory(_messageFactory, _channels);
     server.listen(_handle);
+
+    configuration = new Configuration.fromFile('/tmp/config.json');
 
     // Setup google webstorage
     new File("/tmp/service.json").readAsString()
@@ -111,7 +115,26 @@ class V1Endpoints {
     req.response.close();
   }
 
+  void _validateCorsDomains(HttpRequest req) {
+    var allowedOrigin = 'origin';
+    var requestingOrigin = req.headers.value('origin');
+
+    var isValidOrigin = configuration.CorsDomains
+        .any((domain) => domain.origin == requestingOrigin);
+
+    if (isValidOrigin) {
+      allowedOrigin = requestingOrigin;
+    }
+
+    req.response.headers.add("Access-Control-Allow-Origin", allowedOrigin);
+    req.response.headers
+        .add("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    req.response.headers.add("Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept");
+  }
+
   void _handle(HttpRequest req) {
+    _validateCorsDomains(req);
     (_handlers[req.uri.path] ?? _defaultHandler)(req);
   }
 }
