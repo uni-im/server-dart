@@ -8,15 +8,16 @@ class Configuration {
   factory Configuration.defaultValues() => new Configuration([]);
 
   factory Configuration.fromFile(String path) {
-    new File(path).readAsString().then((v) {
-      var configMap = JSON.decode(v);
+    try {
+      var configFile = new File(path);
+      var jsonString = configFile.readAsStringSync();
+      var configMap = JSON.decode(jsonString);
       Iterable<Uri> corsDomains =
           configMap['cors-domains']?.map(Uri.parse) ?? [];
 
       return new Configuration(corsDomains);
-    }).catchError((e) {
-      print('Used default configuration: $e');
+    } catch (e) {
       return new Configuration.defaultValues();
-    }, test: (e) => e is FileSystemException);
+    }
   }
 }
